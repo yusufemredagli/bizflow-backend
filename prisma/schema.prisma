@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships CompanyMember[]
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members         CompanyMember[]
+  customers       Customer[]
+  serviceRequests ServiceRequest[]
+
+  auditLogs AuditLog[]
+}
+
+enum CompanyRole {
+  OWNER
+  MANAGER
+  TECHNICIAN
+}
+
+model CompanyMember {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  companyId Int
+  role      CompanyRole
+  createdAt DateTime    @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  assignments   RequestAssignment[]
+  statusChanges RequestStatusHistory[]
+
+  auditLogs AuditLog[]
+
+  uploadedAttachments ServiceRequestAttachment[]
+
+  @@unique([userId, companyId])
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String?
+  email     String?
+  phone     String?
+  address   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company         Company          @relation(fields: [companyId], references: [id])
+  serviceRequests ServiceRequest[]
+}
+
+enum ServiceRequestStatus {
+  OPEN
+  ASSIGNED
+  ON_THE_WAY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ServicePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model ServiceRequest {
+  id          Int                  @id @default(autoincrement())
+  companyId   Int
+  customerId  Int
+  title       String
+  description String
+  status      ServiceRequestStatus @default(OPEN)
+  priority    ServicePriority      @default(NORMAL)
+
+  scheduledAt DateTime?
+  slaDeadline DateTime?
+  completedAt DateTime?
+
+  completionNote String?  @db.Text
+  materialsUsed  String?  @db.Text
+  customerNote   String?  @db.Text
+  serviceFee     Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  assignments   RequestAssignment[]
+  statusHistory RequestStatusHistory[]
+
+  attachments ServiceRequestAttachment[]
+
+  @@index([companyId, status])
+  @@index([companyId, scheduledAt])
+  @@index([companyId, slaDeadline])
+}
+
+model RequestAssignment {
+  id         Int      @id @default(autoincrement())
+  requestId  Int
+  memberId   Int
+  assignedAt DateTime @default(now())
+
+  request ServiceRequest @relation(fields: [requestId], references: [id])
+  member  CompanyMember  @relation(fields: [memberId], references: [id])
+
+  @@unique([requestId, memberId])
+}
+
+model RequestStatusHistory {
+  id                Int                  @id @default(autoincrement())
+  requestId         Int
+  changedByMemberId Int
+  oldStatus         ServiceRequestStatus
+  newStatus         ServiceRequestStatus
+  createdAt         DateTime             @default(now())
+
+  request   ServiceRequest @relation(fields: [requestId], references: [id])
+  changedBy CompanyMember  @relation(fields: [changedByMemberId], references: [id])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  ASSIGN
+  STATUS_CHANGE
+  LOGIN
+}
+
+model AuditLog {
+  id            Int         @id @default(autoincrement())
+  companyId     Int
+  actorMemberId Int?
+  action        AuditAction
+  entityType    String
+  entityId      Int?
+  message       String
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+
+  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor   CompanyMember? @relation(fields: [actorMemberId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model ServiceRequestAttachment {
+  id           Int      @id @default(autoincrement())
+  requestId    Int
+  uploadedById Int?
+  fileName     String
+  originalName String
+  mimeType     String
+  fileSize     Int
+  filePath     String
+  createdAt    DateTime @default(now())
+
+  request    ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  uploadedBy CompanyMember? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+}

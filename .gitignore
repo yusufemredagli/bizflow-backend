@@ -1,0 +1,15 @@
+/uploads
+# Local / secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Runtime uploads
+uploads/
+
+# Build / OS
+dist/
+.DS_Store
